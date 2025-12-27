@@ -22,7 +22,7 @@ there a still some bugs and problems left.
 This is a portable app. No installation required.
 
 Jus download the latest release for your platform from the **Assets** section on
-the [Releases](./releases/latest) page:
+the [Releases](https://github.com/Kaladum/Simple-WC3/releases/latest) page:
 
 - **Windows**: `simple-wc3-windows-x86_64.exe`
 - **Linux**: `simple-wc3-linux-x86_64`
