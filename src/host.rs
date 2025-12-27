@@ -51,17 +51,17 @@ impl ProtocolHandler for TcpPortClient {
         );
         let mut local_stream = TcpStream::connect(SocketAddr::from((LOCALHOST_V4, self.port)))
             .await
-            .expect("Can't connect to local tcp port");
+            .inspect_err(|e| eprintln!("Error connecting to local TCP port: {}", e))?;
 
         let (mut send, mut recv) = connection
             .accept_bi()
             .await
-            .expect("Can't accept incoming tcp stream");
+            .inspect_err(|e| eprintln!("Error accepting incoming TCP stream: {}", e))?;
         let mut web_connection = tokio::io::join(&mut recv, &mut send);
 
-        tokio::io::copy_bidirectional(&mut web_connection, &mut local_stream)
+        let _ = tokio::io::copy_bidirectional(&mut web_connection, &mut local_stream)
             .await
-            .expect("Error during copy_bidirectional on host");
+            .inspect_err(|e| eprintln!("Error during copy_bidirectional on host: {}", e));
 
         Ok(())
     }
@@ -86,14 +86,22 @@ impl ProtocolHandler for UdpPortClient {
             connection.remote_id()
         );
 
-        let listen_socket = Arc::from(UdpSocket::bind(ZERO_SOCKET_ADDR).await?);
+        let listen_socket = Arc::from(
+            UdpSocket::bind(ZERO_SOCKET_ADDR)
+                .await
+                .inspect_err(|e| eprintln!("Error binding local UDP socket: {}", e))?,
+        );
         listen_socket
             .connect(SocketAddr::from((LOCALHOST_V4, self.port)))
-            .await?; //Limit socket to only communicate with local server
+            .await
+            .inspect_err(|e| eprintln!("Binding UDP port to localhost failed: {}", e))?; //Limit socket to only communicate with local server
 
         let send_socket = listen_socket.clone();
 
-        let (mut send, mut recv) = connection.accept_bi().await?;
+        let (mut send, mut recv) = connection
+            .accept_bi()
+            .await
+            .inspect_err(|e| eprintln!("Can't accept iroh UDP tunnel: {}", e))?;
 
         let web_to_client_task = tokio::task::spawn(async move {
             let mut buffer = [0u8; 1024];
@@ -101,19 +109,16 @@ impl ProtocolHandler for UdpPortClient {
                 match recv.read(&mut buffer).await {
                     Ok(Some(len)) => {
                         let data = &buffer[..len];
-                        match send_socket.send(data).await {
-                            Result::Ok(_) => {}
-                            Result::Err(e) => {
-                                println!("Error sending data: {:?}", e);
-                            }
-                        };
+                        if let Err(e) = send_socket.send(data).await {
+                            eprintln!("Error sending UDP packet to localhost: {:?}", e);
+                        }
                     }
                     Ok(None) => {
                         println!("UDP stream closed by remote");
                         break;
                     }
                     Result::Err(e) => {
-                        println!("Error receiving data from web: {:?}", e);
+                        eprintln!("Error receiving data from web: {:?}", e);
                         break;
                     }
                 }
@@ -126,19 +131,20 @@ impl ProtocolHandler for UdpPortClient {
                 match listen_socket.recv(&mut buffer).await {
                     Result::Ok(len) => {
                         let data = &buffer[..len];
-                        send.write_all(data)
-                            .await
-                            .expect("Can't write udp traffic to stream");
+                        if let Err(e) = send.write_all(data).await {
+                            eprintln!("Error sending UDP packet to client: {:?}", e);
+                            break;
+                        }
                     }
                     Result::Err(e) => {
-                        println!("Error receiving data: {:?}", e);
+                        eprintln!("Error receiving UDP packet from localhost: {:?}", e);
                     }
                 };
             }
         });
 
-        web_to_client_task.await.expect("UDP send failed");
-        client_to_web_task.await.expect("UDP receive failed");
+        web_to_client_task.await.expect("UDP send task failed");
+        client_to_web_task.await.expect("UDP receive task failed");
         Ok(())
     }
 }

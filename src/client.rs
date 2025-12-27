@@ -17,17 +17,17 @@ pub async fn demo_client(address: EndpointAddr) {
     let tcp_connection = endpoint
         .connect(address.clone(), &ALPN_TCP_6112)
         .await
-        .expect("Can't connect to host");
+        .expect("Can't connect TCP tunnel to host");
 
     let udp_connection = endpoint
         .connect(address, &ALPN_UDP_6112)
         .await
-        .expect("Can't connect to host");
+        .expect("Can't connect UDP tunnel to host");
 
     let (mut udp_web_send, mut udp_web_recv) = udp_connection
         .open_bi()
         .await
-        .expect("Can't open udp tunnel to host");
+        .expect("Can't open UDP stream to host");
 
     let tcp_client = TcpListener::bind(ZERO_SOCKET_ADDR)
         .await
@@ -35,7 +35,7 @@ pub async fn demo_client(address: EndpointAddr) {
 
     let random_port = tcp_client
         .local_addr()
-        .expect("Can't determine local tcp port")
+        .expect("Can't determine local TCP port")
         .port();
 
     tokio::spawn(connect_tcp_port_to_iroh(tcp_client, tcp_connection));
@@ -43,20 +43,19 @@ pub async fn demo_client(address: EndpointAddr) {
     let local_udp_sender = Arc::from(
         UdpSocket::bind(ZERO_SOCKET_ADDR)
             .await
-            .expect("Can't create udp sender"),
+            .expect("Can't create UDP sender"),
     );
     local_udp_sender
         .connect(LOCALHOST_WC3_ADDR)
         .await
-        .expect("Can't connect local udp socket to local game");
+        .expect("Can't connect local UDP socket to local game");
 
     tokio::spawn(async move {
         loop {
-            udp_web_send
-                .write_all(&QUERY_FOR_GAME_PACKET)
-                .await
-                .expect("Can't send game query to host");
-
+            if let Err(e) = udp_web_send.write_all(&QUERY_FOR_GAME_PACKET).await {
+                eprintln!("Can't send game query to host: {}", e);
+                break;
+            }
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
     });
@@ -65,9 +64,9 @@ pub async fn demo_client(address: EndpointAddr) {
     while let Some(len) = udp_web_recv
         .read(&mut buf)
         .await
-        .expect("Can't read from udp web tunnel")
+        .expect("Can't read from UDP web tunnel")
     {
-        println!("{:?} bytes received from host", len);
+        //println!("{:?} bytes received from host", len);
         let data = &mut buf[0..len];
 
         let forward = match Wc3UdpMessageType::detect(data) {
@@ -85,12 +84,9 @@ pub async fn demo_client(address: EndpointAddr) {
         };
 
         if forward {
-            match local_udp_sender.send(data).await {
-                Ok(_) => {}
-                Result::Err(e) => {
-                    println!("Error sending data to local game: {:?}", e);
-                }
-            };
+            if let Err(e) = local_udp_sender.send(data).await {
+                eprintln!("Error sending data to local game: {:?}", e);
+            }
         }
     }
 }
@@ -100,26 +96,27 @@ async fn connect_tcp_port_to_iroh(
     web_connection: Connection,
 ) -> Result<(), AcceptError> {
     loop {
-        let (mut local_tcp_stream, _) = local_socket
-            .accept()
-            .await
-            .expect("Can't accept tcp stream");
-        let cloned_conn = web_connection.clone();
-        tokio::spawn(async move {
-            let mut web_stream = {
-                let (send_stream, recv_stream) = cloned_conn
-                    .open_bi()
-                    .await
-                    .expect("Failed to open stream to host");
-                tokio::io::join(recv_stream, send_stream)
-            };
+        match local_socket.accept().await {
+            Ok((mut local_tcp_stream, _)) => {
+                let cloned_conn = web_connection.clone();
+                tokio::spawn(async move {
+                    let mut web_stream = {
+                        let (send_stream, recv_stream) = cloned_conn
+                            .open_bi()
+                            .await
+                            .expect("Failed to open stream to host");
+                        tokio::io::join(recv_stream, send_stream)
+                    };
 
-            match copy_bidirectional(&mut web_stream, &mut local_tcp_stream).await {
-                Result::Ok(_) => {}
-                Result::Err(e) => {
-                    println!("Error during copy_bidirectional on client: {}", e);
-                }
+                    if let Err(e) = copy_bidirectional(&mut web_stream, &mut local_tcp_stream).await
+                    {
+                        eprintln!("Error during copy_bidirectional on client: {}", e);
+                    }
+                });
             }
-        });
+            Err(e) => {
+                eprintln!("Can't accept TCP stream: {}", e);
+            }
+        }
     }
 }
