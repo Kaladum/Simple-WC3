@@ -1,0 +1,11 @@
+[package]
+name = "simple-wc3"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+iroh = "0.95.1"
+tokio = { version = "1.48.0", features = ["full"] }
+
+[profile.release]
+lto = true
