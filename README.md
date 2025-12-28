@@ -31,15 +31,14 @@ the [Releases](https://github.com/Kaladum/Simple-WC3/releases/latest) page:
 
 #### Prerequisites
 
-- [Rust](https://rustup.rs/) (latest stable version)
-- Cargo (included with Rust)
+- [Rust+Cargo](https://rust-lang.org/) (latest stable version)
 
 #### Build Steps
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd wc-lan
+git clone https://github.com/Kaladum/Simple-WC3.git
+cd Simple-WC3
 
 # Build in release mode
 cargo build --release
@@ -53,16 +52,20 @@ cargo build --release
 
 ### Hosting a Game
 
-1. Run the application
+1. Run Simple-WC3
 2. Press Enter when prompted (leave the input empty)
 3. The application will display a public key/address
 4. Share this address with other players who want to join
+5. Start WC3
+6. Host the game
 
 ### Joining a Game
 
-1. Run the application
+1. Run Simple-WC3
 2. When prompted, enter the host's public key/address
 3. Press Enter to connect
+4. Start WC3
+5. Join the Game
 
 ## Configuration
 
