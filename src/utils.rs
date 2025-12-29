@@ -11,5 +11,5 @@ pub const ZERO_SOCKET_ADDR: SocketAddr = SocketAddr::new(ZERO_IP, 0);
 pub const LOCALHOST_V4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 pub const LOCALHOST_WC3_ADDR: SocketAddr = SocketAddr::new(LOCALHOST_V4, WC3_DEFAULT_PORT);
 
-pub const APP_NAME: &str = env!("CARGO_BIN_NAME");
+pub const APP_NAME: &str = "Simple-WC3";
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");

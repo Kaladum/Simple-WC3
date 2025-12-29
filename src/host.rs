@@ -23,7 +23,10 @@ pub async fn demo_host() {
         .spawn();
 
     ep.online().await;
-    println!("Host is running with address: {}", ep.addr().id);
+    println!("Host is running with address:");
+    println!("{}", ep.addr().id);
+    println!("Copy this address and share it with all players to let them connect");
+    println!("Press Ctrl+C or close the window to shut down");
 
     tokio::signal::ctrl_c()
         .await

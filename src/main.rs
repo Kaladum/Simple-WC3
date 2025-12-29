@@ -15,7 +15,7 @@ mod utils;
 
 #[tokio::main]
 async fn main() {
-    println!("{} V{}", APP_NAME, APP_VERSION);
+    println!("{} v{}", APP_NAME, APP_VERSION);
     println!("Visit https://github.com/Kaladum/Simple-WC3 for more information.");
     println!();
     println!("Enter remote address to connect or press Enter to host:");
