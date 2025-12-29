@@ -11,7 +11,7 @@ use crate::{
     utils::{ALPN_TCP_6112, ALPN_UDP_6112, LOCALHOST_WC3_ADDR, ZERO_SOCKET_ADDR},
 };
 
-pub async fn demo_client(address: EndpointAddr) {
+pub async fn run_client(address: EndpointAddr) {
     let endpoint = Endpoint::bind().await.expect("Can't create endpoint");
 
     let tcp_connection = endpoint

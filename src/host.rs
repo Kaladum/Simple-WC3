@@ -11,7 +11,7 @@ use crate::utils::{
     ALPN_TCP_6112, ALPN_UDP_6112, LOCALHOST_V4, WC3_DEFAULT_PORT, ZERO_SOCKET_ADDR,
 };
 
-pub async fn demo_host() {
+pub async fn run_host() {
     let ep = Endpoint::builder()
         .bind()
         .await

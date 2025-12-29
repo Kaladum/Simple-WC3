@@ -3,8 +3,8 @@ use std::str::FromStr;
 use iroh::{EndpointAddr, PublicKey};
 
 use crate::{
-    client::demo_client,
-    host::demo_host,
+    client::run_client,
+    host::run_host,
     utils::{APP_NAME, APP_VERSION},
 };
 
@@ -27,10 +27,10 @@ async fn main() {
 
     if connect_to_remote.is_empty() {
         println!("Starting as host");
-        demo_host().await;
+        run_host().await;
     } else {
         println!("Connecting to host");
         let address = PublicKey::from_str(&connect_to_remote).expect("Invalid address");
-        demo_client(EndpointAddr::new(address)).await;
+        run_client(EndpointAddr::new(address)).await;
     }
 }
