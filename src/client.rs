@@ -15,12 +15,12 @@ pub async fn run_client(address: EndpointAddr) {
     let endpoint = Endpoint::bind().await.expect("Can't create endpoint");
 
     let tcp_connection = endpoint
-        .connect(address.clone(), &ALPN_TCP_6112)
+        .connect(address.clone(), ALPN_TCP_6112)
         .await
         .expect("Can't connect TCP tunnel to host");
 
     let udp_connection = endpoint
-        .connect(address, &ALPN_UDP_6112)
+        .connect(address, ALPN_UDP_6112)
         .await
         .expect("Can't connect UDP tunnel to host");
 
