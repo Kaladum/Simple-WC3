@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use iroh::{
     Endpoint,
-    endpoint::Connection,
+    endpoint::{Connection, ReadError},
     protocol::{AcceptError, ProtocolHandler, Router},
 };
 use tokio::net::{TcpStream, UdpSocket};
@@ -120,8 +120,12 @@ impl ProtocolHandler for UdpPortClient {
                         println!("UDP stream closed by remote");
                         break;
                     }
+                    Result::Err(ReadError::ConnectionLost(_)) => {
+                        eprintln!("Client {} disconnected UDP stream", connection.remote_id());
+                        break;
+                    }
                     Result::Err(e) => {
-                        eprintln!("Error receiving data from web: {:?}", e);
+                        eprintln!("Error receiving data from client: {:?}", e);
                         break;
                     }
                 }
