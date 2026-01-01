@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use binrw::NullString;
 use iroh::{Endpoint, EndpointAddr, endpoint::Connection, protocol::AcceptError};
 use tokio::{
     io::copy_bidirectional,
@@ -7,8 +8,10 @@ use tokio::{
 };
 
 use crate::{
-    packets::{QUERY_FOR_GAME_PACKET, Wc3UdpMessageType, hack_game_name, update_port},
-    utils::{ALPN_TCP_6112, ALPN_UDP_6112, LOCALHOST_WC3_ADDR, ZERO_SOCKET_ADDR},
+    packets::{GameType, QueryForGamesRequest, Wc3UdpMessageType},
+    utils::{
+        ALPN_TCP_6112, ALPN_UDP_6112, APP_NAME, LOCALHOST_WC3_ADDR, ZERO_SOCKET_ADDR, try_serialize,
+    },
 };
 
 pub async fn run_client(address: EndpointAddr) {
@@ -51,8 +54,11 @@ pub async fn run_client(address: EndpointAddr) {
         .expect("Can't connect local UDP socket to local game");
 
     tokio::spawn(async move {
+        let query_for_game =
+            try_serialize(&QueryForGamesRequest::new(GameType::TheFrozenThrone, 26))
+                .expect("Failed to serialize QueryForGamesRequest packet");
         loop {
-            if let Err(e) = udp_web_send.write_all(&QUERY_FOR_GAME_PACKET).await {
+            if let Err(e) = udp_web_send.write_all(&query_for_game).await {
                 eprintln!("Can't send game query to host: {}", e);
                 break;
             }
@@ -66,25 +72,31 @@ pub async fn run_client(address: EndpointAddr) {
         .await
         .expect("Can't read from UDP web tunnel")
     {
-        //println!("{:?} bytes received from host", len);
-        let data = &mut buf[0..len];
+        let data = &buf[0..len];
 
         let forward = match Wc3UdpMessageType::detect(data) {
-            Some(Wc3UdpMessageType::QueryForGamesResponse) => {
+            Some(Wc3UdpMessageType::QueryForGamesResponse(mut response)) => {
                 println!("Modifying QueryForGamesResponse packet");
-                hack_game_name(data, b"FakeConnection");
-                update_port(data, random_port);
-                true
+                response.tcp_port = random_port;
+                let mut new_name = format!("[{}] {}", APP_NAME, response.game_name);
+                new_name.truncate(31); //Trim to max 31 chars for WC3 size limit
+                response.packet_size -= response.game_name.len() as u16;
+                response.packet_size += new_name.len() as u16;
+                response.game_name = NullString::from(new_name);
+                Some(
+                    try_serialize(&response)
+                        .expect("Failed to serialize modified QueryForGamesResponse packet"),
+                )
             }
             Some(packet_type) => {
                 println!("Forwarding packet type: {:?}", packet_type);
-                true
+                Some(data.to_vec())
             }
-            _ => false,
+            _ => None,
         };
 
-        if forward {
-            if let Err(e) = local_udp_sender.send(data).await {
+        if let Some(buffer) = forward {
+            if let Err(e) = local_udp_sender.send(&buffer).await {
                 eprintln!("Error sending data to local game: {:?}", e);
             }
         }
