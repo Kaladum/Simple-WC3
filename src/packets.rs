@@ -39,11 +39,8 @@ impl Wc3UdpMessageType {
 //There is also a Doc in that repo that describes the packet structure but it looks like the doc is wrong in some places.
 #[derive(BinRead, BinWrite, Debug)]
 #[brw(little)]
+#[brw(magic = b"\xF7\x30")] //byte 0-1
 pub struct QueryForGamesResponse {
-    #[br(assert(header == 0xF7))]
-    pub header: u8, //byte 0
-    #[br(assert(op_code == 0x30))]
-    pub op_code: u8, //byte 1
     pub packet_size: u16,      //bytes 2-3
     pub game_type: GameType,   //bytes 4-7
     pub unknown1: u32,         //bytes 8-11
@@ -63,11 +60,8 @@ pub struct QueryForGamesResponse {
 
 #[derive(BinRead, BinWrite, Debug)]
 #[brw(little)]
+#[brw(magic = b"\xF7\x2F")] //byte 0-1
 pub struct QueryForGamesRequest {
-    #[br(assert(header == 0xF7))]
-    pub header: u8, //byte 0
-    #[br(assert(op_code == 0x2F))]
-    pub op_code: u8, //byte 1
     #[br(assert(packet_size == 16))]
     pub packet_size: u16, //bytes 2-3
     pub game_type: GameType, //bytes 4-7
@@ -79,8 +73,6 @@ pub struct QueryForGamesRequest {
 impl QueryForGamesRequest {
     pub fn new(game_type: GameType, game_version: u32) -> Self {
         QueryForGamesRequest {
-            header: 0xF7,
-            op_code: 0x2F,
             packet_size: 16,
             game_type,
             game_version,
