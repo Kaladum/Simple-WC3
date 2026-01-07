@@ -93,11 +93,9 @@ impl QueryForGamesRequest {
 #[derive(BinRead, BinWrite, Debug)]
 #[brw(little)]
 pub enum GameType {
-    #[br(magic = b"3RAW")] //WAR3
-    #[bw(magic = b"3RAW")] //WAR3
+    #[brw(magic = b"3RAW")] //WAR3
     Warcraft3,
-    #[br(magic = b"PX3W")] //W3XP
-    #[bw(magic = b"PX3W")] //W3XP
+    #[brw(magic = b"PX3W")] //W3XP
     TheFrozenThrone,
 }
 
