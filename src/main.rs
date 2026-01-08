@@ -9,6 +9,7 @@ use crate::{
 };
 
 mod client;
+mod game_scanner;
 mod host;
 mod packets;
 mod utils;

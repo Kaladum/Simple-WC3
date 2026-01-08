@@ -1,14 +1,17 @@
-use std::{net::SocketAddr, sync::Arc};
-
 use iroh::{
     Endpoint,
-    endpoint::{Connection, ReadError},
+    endpoint::{Connection, WriteError},
     protocol::{AcceptError, ProtocolHandler, Router},
 };
-use tokio::net::{TcpStream, UdpSocket};
+use tokio::{
+    net::TcpStream,
+    sync::broadcast::{Receiver, Sender},
+};
 
-use crate::utils::{
-    ALPN_TCP_6112, ALPN_UDP_6112, LOCALHOST_V4, WC3_DEFAULT_PORT, ZERO_SOCKET_ADDR,
+use crate::{
+    game_scanner,
+    packets::GenerableWc3UdpMessageType,
+    utils::{ALPN, LOCALHOST_WC3_ADDR, try_serialize},
 };
 
 pub async fn run_host() {
@@ -17,16 +20,21 @@ pub async fn run_host() {
         .await
         .expect("Can't create endpoint");
 
-    let _router = Router::builder(ep.clone())
-        .accept(ALPN_TCP_6112, TcpPortClient::new(WC3_DEFAULT_PORT))
-        .accept(ALPN_UDP_6112, UdpPortClient::new(WC3_DEFAULT_PORT))
-        .spawn();
+    let game_scanner_tx = game_scanner::run_game_scanner().await;
 
+    let handler = ClientHandler {
+        scanner: game_scanner_tx,
+    };
+    Router::builder(ep.clone()).accept(ALPN, handler).spawn();
     ep.online().await;
     println!("Host is running with address:");
     println!("{}", ep.addr().id);
-    println!("Copy this address and share it with all players to let them connect");
+    println!();
+    println!(
+        "Copy this address (by selecting it and right-clicking) and share it with all players to let them connect"
+    );
     println!("Press Ctrl+C or close the window to shut down");
+    println!();
 
     tokio::signal::ctrl_c()
         .await
@@ -35,24 +43,21 @@ pub async fn run_host() {
 }
 
 #[derive(Debug, Clone)]
-struct TcpPortClient {
-    port: u16,
+struct ClientHandler {
+    pub scanner: Sender<GenerableWc3UdpMessageType>,
 }
 
-impl TcpPortClient {
-    pub fn new(port: u16) -> Self {
-        Self { port }
-    }
-}
-
-impl ProtocolHandler for TcpPortClient {
+impl ProtocolHandler for ClientHandler {
     async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
-        println!(
-            "Received TCP stream for port {} from {}",
-            self.port,
-            connection.remote_id()
-        );
-        let mut local_stream = TcpStream::connect(SocketAddr::from((LOCALHOST_V4, self.port)))
+        println!("New client connected: {}", connection.remote_id());
+
+        let scanner = self.scanner.subscribe();
+
+        let client_id = connection.remote_id();
+
+        tokio::spawn(send_udp_packets_to_client(connection.clone(), scanner));
+
+        let mut local_stream = TcpStream::connect(LOCALHOST_WC3_ADDR)
             .await
             .inspect_err(|e| eprintln!("Error connecting to local TCP port: {}", e))?;
 
@@ -60,98 +65,50 @@ impl ProtocolHandler for TcpPortClient {
             .accept_bi()
             .await
             .inspect_err(|e| eprintln!("Error accepting incoming TCP stream: {}", e))?;
-        let mut web_connection = tokio::io::join(&mut recv, &mut send);
 
-        let _ = tokio::io::copy_bidirectional(&mut web_connection, &mut local_stream)
-            .await
-            .inspect_err(|e| eprintln!("Error during copy_bidirectional on host: {}", e));
+        tokio::spawn(async move {
+            let mut web_connection = tokio::io::join(&mut recv, &mut send);
+            if let Err(e) =
+                tokio::io::copy_bidirectional(&mut web_connection, &mut local_stream).await
+            {
+                eprintln!(
+                    "TCP port forwarding for client {} stopped with error: {}",
+                    client_id, e
+                );
+            };
+        });
+
+        connection.closed().await;
+        println!("Client disconnected: {}", connection.remote_id());
 
         Ok(())
     }
 }
 
-#[derive(Debug, Clone)]
-struct UdpPortClient {
-    port: u16,
-}
+async fn send_udp_packets_to_client(
+    connection: Connection,
+    mut scanner: Receiver<GenerableWc3UdpMessageType>,
+) {
+    let mut udp_send_stream = connection
+        .open_uni()
+        .await
+        .expect("Can't open UDP stream to client");
 
-impl UdpPortClient {
-    pub fn new(port: u16) -> Self {
-        Self { port }
-    }
-}
+    loop {
+        if let Ok(message) = scanner.recv().await {
+            let serialized_packet =
+                try_serialize(&message).expect("Failed to serialize UDP packet");
 
-impl ProtocolHandler for UdpPortClient {
-    async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
-        println!(
-            "Received UDP stream for port {} from {}",
-            self.port,
-            connection.remote_id()
-        );
-
-        let listen_socket = Arc::from(
-            UdpSocket::bind(ZERO_SOCKET_ADDR)
-                .await
-                .inspect_err(|e| eprintln!("Error binding local UDP socket: {}", e))?,
-        );
-        listen_socket
-            .connect(SocketAddr::from((LOCALHOST_V4, self.port)))
-            .await
-            .inspect_err(|e| eprintln!("Binding UDP port to localhost failed: {}", e))?; //Limit socket to only communicate with local server
-
-        let send_socket = listen_socket.clone();
-
-        let (mut send, mut recv) = connection
-            .accept_bi()
-            .await
-            .inspect_err(|e| eprintln!("Can't accept iroh UDP tunnel: {}", e))?;
-
-        let web_to_client_task = tokio::task::spawn(async move {
-            let mut buffer = [0u8; 1024];
-            loop {
-                match recv.read(&mut buffer).await {
-                    Ok(Some(len)) => {
-                        let data = &buffer[..len];
-                        if let Err(e) = send_socket.send(data).await {
-                            eprintln!("Error sending UDP packet to localhost: {:?}", e);
-                        }
-                    }
-                    Ok(None) => {
-                        println!("UDP stream closed by remote");
-                        break;
-                    }
-                    Result::Err(ReadError::ConnectionLost(_)) => {
-                        eprintln!("Client {} disconnected UDP stream", connection.remote_id());
-                        break;
-                    }
-                    Result::Err(e) => {
-                        eprintln!("Error receiving data from client: {:?}", e);
-                        break;
-                    }
+            match udp_send_stream.write_all(&serialized_packet).await {
+                Err(WriteError::ConnectionLost(_)) => {
+                    //Connection closed, stop sending packets
+                    break;
                 }
+                Err(e) => {
+                    eprintln!("Error sending UDP packet to client: {}", e);
+                }
+                Ok(_) => {}
             }
-        });
-
-        let client_to_web_task = tokio::task::spawn(async move {
-            let mut buffer = [0u8; 1024];
-            loop {
-                match listen_socket.recv(&mut buffer).await {
-                    Result::Ok(len) => {
-                        let data = &buffer[..len];
-                        if let Err(e) = send.write_all(data).await {
-                            eprintln!("Error sending UDP packet to client: {:?}", e);
-                            break;
-                        }
-                    }
-                    Result::Err(e) => {
-                        eprintln!("Error receiving UDP packet from localhost: {:?}", e);
-                    }
-                };
-            }
-        });
-
-        web_to_client_task.await.expect("UDP send task failed");
-        client_to_web_task.await.expect("UDP receive task failed");
-        Ok(())
+        }
     }
 }
