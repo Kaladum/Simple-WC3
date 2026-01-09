@@ -16,7 +16,7 @@ pub async fn run_client(address: EndpointAddr) {
     let endpoint = Endpoint::bind().await.expect("Can't create endpoint");
 
     let connection = endpoint
-        .connect(address.clone(), ALPN)
+        .connect(address, ALPN)
         .await
         .expect("Can't connect to host");
 
