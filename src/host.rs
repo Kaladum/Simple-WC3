@@ -25,7 +25,8 @@ pub async fn run_host() {
     let handler = ClientHandler {
         scanner: game_scanner_tx,
     };
-    Router::builder(ep.clone()).accept(ALPN, handler).spawn();
+    //Do not drop the router. It runs the protocol handler in the background.
+    let _router = Router::builder(ep.clone()).accept(ALPN, handler).spawn();
     ep.online().await;
     println!("Host is running with address:");
     println!("{}", ep.addr().id);
