@@ -18,7 +18,7 @@ pub async fn run_client(address: EndpointAddr) {
     let connection = endpoint
         .connect(address.clone(), ALPN)
         .await
-        .expect("Can't connect TCP tunnel to host");
+        .expect("Can't connect to host");
 
     println!("Connection established");
 
