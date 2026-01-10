@@ -1,6 +1,6 @@
 use iroh::{
-    Endpoint,
-    endpoint::{Connection, WriteError},
+    Endpoint, PublicKey,
+    endpoint::{Connection, RecvStream, SendStream, WriteError},
     protocol::{AcceptError, ProtocolHandler, Router},
 };
 use tokio::{
@@ -50,37 +50,15 @@ struct ClientHandler {
 
 impl ProtocolHandler for ClientHandler {
     async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
-        println!("New client connected: {}", connection.remote_id());
+        let client_id = connection.remote_id();
+        println!("New client connected: {client_id}");
 
         let scanner = self.scanner.subscribe();
-
-        let client_id = connection.remote_id();
-
         tokio::spawn(send_udp_packets_to_client(connection.clone(), scanner));
-
-        let mut local_stream = TcpStream::connect(LOCALHOST_WC3_ADDR)
-            .await
-            .inspect_err(|e| eprintln!("Error connecting to local TCP port: {}", e))?;
-
-        let (mut send, mut recv) = connection
-            .accept_bi()
-            .await
-            .inspect_err(|e| eprintln!("Error accepting incoming TCP stream: {}", e))?;
-
-        tokio::spawn(async move {
-            let mut web_connection = tokio::io::join(&mut recv, &mut send);
-            if let Err(e) =
-                tokio::io::copy_bidirectional(&mut web_connection, &mut local_stream).await
-            {
-                eprintln!(
-                    "TCP port forwarding for client {} stopped with error: {}",
-                    client_id, e
-                );
-            };
-        });
+        tokio::spawn(accept_tcp_forwarding(connection.clone()));
 
         connection.closed().await;
-        println!("Client disconnected: {}", connection.remote_id());
+        println!("Client disconnected: {client_id}");
 
         Ok(())
     }
@@ -106,10 +84,45 @@ async fn send_udp_packets_to_client(
                     break;
                 }
                 Err(e) => {
-                    eprintln!("Error sending UDP packet to client: {}", e);
+                    eprintln!("Error sending UDP packet to client: {e}");
                 }
                 Ok(_) => {}
             }
         }
     }
+}
+
+async fn accept_tcp_forwarding(connection: Connection) {
+    let client_id = connection.remote_id();
+
+    loop {
+        match connection.accept_bi().await {
+            Ok((send, recv)) => {
+                tokio::spawn(async move {
+                    let _ = handle_tcp_forwarding_connection(send, recv, client_id).await;
+                });
+            }
+            Err(e) => {
+                eprintln!("Error accepting incoming TCP stream from client {client_id}: {e}");
+            }
+        };
+    }
+}
+
+async fn handle_tcp_forwarding_connection(
+    mut send: SendStream,
+    mut recv: RecvStream,
+    client_id: PublicKey,
+) -> Result<(), ()> {
+    let mut local_stream = TcpStream::connect(LOCALHOST_WC3_ADDR)
+        .await
+        .map_err(|e| eprintln!("Error connecting to local TCP port for client {client_id}: {e}"))?;
+
+    let mut web_connection = tokio::io::join(&mut recv, &mut send);
+    tokio::io::copy_bidirectional(&mut web_connection, &mut local_stream)
+        .await
+        .map_err(|e| {
+            eprintln!("TCP port forwarding for client {client_id} stopped with error: {e}")
+        })?;
+    Ok(())
 }
