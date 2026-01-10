@@ -19,17 +19,14 @@ use crate::{
 };
 
 pub async fn run_game_scanner() -> Sender<GenerableWc3UdpMessageType> {
-    let listen_socket = Arc::from(
-        UdpSocket::bind(ZERO_SOCKET_ADDR)
-            .await
-            .inspect_err(|e| eprintln!("Error binding local UDP socket: {}", e))
-            .unwrap(),
-    );
+    let listen_socket: Arc<_> = UdpSocket::bind(ZERO_SOCKET_ADDR)
+        .await
+        .expect("Error binding local UDP socket")
+        .into();
     listen_socket
         .connect(LOCALHOST_WC3_ADDR)
         .await
-        .inspect_err(|e| eprintln!("Binding UDP port to localhost failed: {}", e))
-        .unwrap(); //Limit socket to only communicate with local server
+        .expect("Binding UDP port to localhost failed"); //Limit socket to only communicate with local server
 
     let send_socket = listen_socket.clone();
 
@@ -45,13 +42,15 @@ pub async fn run_game_scanner() -> Sender<GenerableWc3UdpMessageType> {
             let _ = tx.send(packet);
         };
 
+        let mut last_send_successful = Option::<bool>::None;
+
         loop {
             let old_state = {
                 // Clear last known state before sending new queries
                 let mut state = last_known_state.lock().await;
                 state.take()
             };
-            send_game_query(&send_socket).await;
+            send_game_query(&send_socket, &mut last_send_successful).await;
             tokio::time::sleep(Duration::from_secs(1)).await;
             let new_state = {
                 let state = last_known_state.lock().await;
@@ -115,15 +114,29 @@ async fn run_port_listener(
     }
 }
 
-async fn send_game_query(send_socket: &UdpSocket) {
+async fn send_game_query(send_socket: &UdpSocket, last_successful: &mut Option<bool>) {
     for game_version in SUPPORTED_GAME_VERSIONS {
         for game_type in SUPPORTED_GAME_TYPES {
             let request = QueryForGamesRequest::new(game_type, game_version);
             let bytes =
                 try_serialize(&request).expect("Failed to serialize QueryForGamesRequest packet");
-            if let Err(e) = send_socket.send(&bytes).await {
-                eprintln!("Can't send game query: {}", e);
-                break;
+
+            match send_socket.send(&bytes).await {
+                Ok(_) => {
+                    if *last_successful != Some(true) {
+                        println!("Successfully sent game query to WC3");
+                    }
+                    *last_successful = Some(true);
+                }
+                Err(e) => {
+                    if *last_successful != Some(false) {
+                        eprintln!(
+                            "Can't send game query to WC3. Is the game running? Error: {}",
+                            e
+                        );
+                    }
+                    *last_successful = Some(false);
+                }
             }
         }
     }
