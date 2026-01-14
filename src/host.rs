@@ -103,8 +103,11 @@ async fn accept_tcp_forwarding(connection: Connection) {
                 });
             }
             Err(e) => {
-                eprintln!("Error accepting incoming TCP stream from client {client_id}: {e}");
-                break;
+                if connection.close_reason().is_some() {
+                    break;
+                } else {
+                    eprintln!("Error accepting incoming TCP stream from client {client_id}: {e}");
+                }
             }
         };
     }
