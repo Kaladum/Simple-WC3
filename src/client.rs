@@ -82,21 +82,8 @@ async fn forward_udp_packets_to_game(connection: Connection, tcp_port: u16) {
         .await
         .expect("Can't connect local UDP socket to local game");
 
-    let mut local_game_available: Option<bool> = None;
-
-    let mut forward_package = async |packet: &[u8]| match local_udp_sender.send(packet).await {
-        Ok(_) => {
-            if local_game_available != Some(true) {
-                println!("Sending packets to local game");
-                local_game_available = Some(true);
-            }
-        }
-        Err(e) => {
-            if local_game_available != Some(false) {
-                eprintln!("Local game UDP port is not available: {}", e);
-                local_game_available = Some(false);
-            }
-        }
+    let forward_package = async |packet: &[u8]| {
+        let _ = local_udp_sender.send(packet).await; //Ignore errors, as the game might not be running and the error behavior is unpredictable
     };
 
     let mut server_detected = false;
