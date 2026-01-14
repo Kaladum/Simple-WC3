@@ -100,7 +100,7 @@ async fn forward_udp_packets_to_game(connection: Connection, tcp_port: u16) {
             Some(Wc3UdpMessageType::QueryForGamesResponse(mut response)) => {
                 if !server_detected {
                     println!(
-                        "Found game on server: {} {:?}[V1.{}]",
+                        "Found game on host: {} {:?}[V1.{}]",
                         response.game_name, response.game_type, response.game_version
                     );
                     server_detected = true;
@@ -119,7 +119,7 @@ async fn forward_udp_packets_to_game(connection: Connection, tcp_port: u16) {
             }
             Some(Wc3UdpMessageType::NewServerHosted) => forward_package(data).await,
             Some(Wc3UdpMessageType::ServerCanceled) => {
-                println!("Server has canceled the game or is no longer available.");
+                println!("The lobby has closed. The game was started or canceled by the host.");
                 server_detected = false;
                 forward_package(data).await;
             }
