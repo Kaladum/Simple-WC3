@@ -21,9 +21,10 @@ async fn main() {
     println!();
     println!("Enter remote address to connect or press Enter to host:");
     let mut connect_to_remote = String::new();
-    std::io::stdin()
-        .read_line(&mut connect_to_remote)
-        .expect("Failed to read address");
+    handle_error!(
+        std::io::stdin().read_line(&mut connect_to_remote),
+        "Failed to read address"
+    );
     connect_to_remote = connect_to_remote.trim().to_string();
 
     if connect_to_remote.is_empty() {
@@ -31,7 +32,7 @@ async fn main() {
         run_host().await;
     } else {
         println!("Connecting to host");
-        let address = PublicKey::from_str(&connect_to_remote).expect("Invalid address");
+        let address = handle_error!(PublicKey::from_str(&connect_to_remote), "Invalid address");
         run_client(EndpointAddr::new(address)).await;
     }
 }

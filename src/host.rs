@@ -9,18 +9,21 @@ use tokio::{
 };
 
 use crate::{
-    game_scanner,
+    game_scanner, handle_error_displayed,
     packets::GenerableWc3UdpMessageType,
     utils::{ALPN, LOCALHOST_WC3_ADDR, try_serialize},
 };
 
 pub async fn run_host() {
-    let ep = Endpoint::builder()
-        .bind()
-        .await
-        .expect("Can't create endpoint");
+    let ep = handle_error_displayed!(
+        Endpoint::builder().bind().await,
+        "Can't create endpoint: {}"
+    );
 
-    let game_scanner_tx = game_scanner::run_game_scanner().await;
+    let game_scanner_tx = handle_error_displayed!(
+        game_scanner::run_game_scanner().await,
+        "Can't start game scanner: {}"
+    );
 
     let handler = ClientHandler {
         scanner: game_scanner_tx,
@@ -37,9 +40,10 @@ pub async fn run_host() {
     println!("Press Ctrl+C or close the window to shut down");
     println!();
 
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to listen for event");
+    handle_error_displayed!(
+        tokio::signal::ctrl_c().await,
+        "failed to listen for event: {}"
+    );
     println!("Shutting down host...");
 }
 
@@ -68,19 +72,27 @@ async fn send_udp_packets_to_client(
     connection: Connection,
     mut scanner: Receiver<GenerableWc3UdpMessageType>,
 ) {
-    let mut udp_send_stream = connection
-        .open_uni()
-        .await
-        .expect("Can't open UDP stream to client");
+    let mut udp_send_stream = handle_error_displayed!(
+        connection.open_uni().await,
+        "Can't open UDP stream to client: {}"
+    );
 
     loop {
         if let Ok(message) = scanner.recv().await {
-            let serialized_packet =
-                try_serialize(&message).expect("Failed to serialize UDP packet");
+            let serialized_packet = if let Some(serialized_packet) = try_serialize(&message) {
+                serialized_packet
+            } else {
+                eprintln!("Failed to serialize UDP packet");
+                continue;
+            };
 
             match udp_send_stream.write_all(&serialized_packet).await {
-                Err(WriteError::ConnectionLost(_)) => {
-                    //Connection closed, stop sending packets
+                Err(
+                    WriteError::ConnectionLost(_)
+                    | WriteError::ClosedStream
+                    | WriteError::Stopped(_),
+                ) => {
+                    //Connection or stream closed, stop sending packets
                     break;
                 }
                 Err(e) => {

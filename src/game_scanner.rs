@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 use tokio::{
+    io,
     net::UdpSocket,
     sync::{
         Mutex,
@@ -18,15 +19,9 @@ use crate::{
     },
 };
 
-pub async fn run_game_scanner() -> Sender<GenerableWc3UdpMessageType> {
-    let listen_socket: Arc<_> = UdpSocket::bind(ZERO_SOCKET_ADDR)
-        .await
-        .expect("Error binding local UDP socket")
-        .into();
-    listen_socket
-        .connect(LOCALHOST_WC3_ADDR)
-        .await
-        .expect("Binding UDP port to localhost failed"); //Limit socket to only communicate with local server
+pub async fn run_game_scanner() -> io::Result<Sender<GenerableWc3UdpMessageType>> {
+    let listen_socket: Arc<_> = UdpSocket::bind(ZERO_SOCKET_ADDR).await?.into();
+    listen_socket.connect(LOCALHOST_WC3_ADDR).await?; //Limit socket to only communicate with local server
 
     let send_socket = listen_socket.clone();
 
@@ -90,7 +85,7 @@ pub async fn run_game_scanner() -> Sender<GenerableWc3UdpMessageType> {
 
     tokio::spawn(async move { run_port_listener(listen_socket, last_known_state_set).await });
 
-    tx_external
+    io::Result::Ok(tx_external)
 }
 
 async fn run_port_listener(
@@ -118,8 +113,12 @@ async fn send_game_query(send_socket: &UdpSocket, last_successful: &mut Option<b
     for game_version in SUPPORTED_GAME_VERSIONS {
         for game_type in SUPPORTED_GAME_TYPES {
             let request = QueryForGamesRequest::new(game_type, game_version);
-            let bytes =
-                try_serialize(&request).expect("Failed to serialize QueryForGamesRequest packet");
+            let bytes = if let Some(bytes) = try_serialize(&request) {
+                bytes
+            } else {
+                eprintln!("Failed to serialize QueryForGamesRequest packet");
+                continue;
+            };
 
             match send_socket.send(&bytes).await {
                 Ok(_) => {
