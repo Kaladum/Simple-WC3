@@ -43,3 +43,29 @@ where
 
 pub const SUPPORTED_GAME_VERSIONS: RangeInclusive<u32> = 25..=31;
 pub const SUPPORTED_GAME_TYPES: [GameType; 2] = [GameType::Warcraft3, GameType::TheFrozenThrone];
+
+#[macro_export]
+macro_rules! handle_error {
+    ($x:expr,$error_message:literal) => {{
+        match $x {
+            Ok(val) => val,
+            Err(_e) => {
+                eprintln!($error_message);
+                return;
+            }
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! handle_error_displayed {
+    ($x:expr,$error_message:literal) => {{
+        match $x {
+            Ok(val) => val,
+            Err(e) => {
+                eprintln!($error_message, e);
+                return;
+            }
+        }
+    }};
+}
