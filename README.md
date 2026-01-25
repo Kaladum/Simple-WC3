@@ -4,8 +4,8 @@ A unofficial [Warcraft 3](https://warcraft3.blizzard.com/) LAN connectivity tool
 built with Rust, enabling LAN Games over the internet using the
 [Iroh](https://www.iroh.computer/) network protocol.
 
-This library is in a pre-release version. First tests have been successful but
-there a still some bugs and problems left.
+The software is currently in beta. Our first tests went well, but there are
+still a few bugs and issues we’re working on fixing.
 
 ## Features
 
@@ -29,6 +29,9 @@ the [Releases](https://github.com/Kaladum/Simple-WC3/releases/latest) page:
 
 ### Building from Source
 
+<details>
+<summary>How to build from source</summary>
+
 #### Prerequisites
 
 - [Rust+Cargo](https://rust-lang.org/) (latest stable version)
@@ -47,6 +50,8 @@ cargo build --release
 # target/release/simple-wc3.exe (Windows)
 # target/release/simple-wc3 (Linux)
 ```
+
+</details>
 
 ## Usage
 
