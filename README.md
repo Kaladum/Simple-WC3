@@ -82,8 +82,6 @@ If your port is not set to 6112 you will not be able to host!
 
 - Verify that all users use the same Version of Warcraft 3
   - The Game Version can be seen in the bottom right corner of the main menu
-  - Warning: Currently only WC3 Frozen Throne Version 1.26.x.x is supported but
-    this will change soon
 - Verify that all users use the same Version of Simple-WC3
   - Preferably use the latest version
 - Look for error messages in the console outputs
