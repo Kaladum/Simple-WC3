@@ -2,7 +2,7 @@ use binrw::{BinRead, BinWrite, NullString};
 
 use crate::utils::try_parse;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Wc3UdpMessageType {
     /** Packet 3a */
     QueryForGamesRequest,
@@ -14,6 +14,17 @@ pub enum Wc3UdpMessageType {
     NumberOfPlayersChanged,
     /** Packet 3e */
     ServerCanceled,
+}
+
+#[derive(BinRead, BinWrite, Debug, Clone)]
+#[brw(little)]
+pub enum GenerableWc3UdpMessageType {
+    /** Packet 3b */
+    QueryForGamesResponse(QueryForGamesResponse),
+    /** Packet 3c */
+    NewServerHosted(NewServerHosted),
+    /** Packet 3e */
+    ServerClosed(ServerClosed),
 }
 
 impl Wc3UdpMessageType {
@@ -37,33 +48,33 @@ impl Wc3UdpMessageType {
 
 //Based on the implementation found at https://github.com/Qyperion/WC3LanGame
 //There is also a Doc in that repo that describes the packet structure but it looks like the doc is wrong in some places.
-#[derive(BinRead, BinWrite, Debug)]
+#[derive(BinRead, BinWrite, Debug, Clone)]
 #[brw(little)]
 #[brw(magic = b"\xF7\x30")] //byte 0-1
 pub struct QueryForGamesResponse {
-    pub packet_size: u16,      //bytes 2-3
-    pub game_type: GameType,   //bytes 4-7
-    pub unknown1: u32,         //bytes 8-11
-    pub game_id: u32,          //bytes 12-15
-    pub unknown2: u32,         //bytes 16-19
+    pub packet_size: u16,    //bytes 2-3
+    pub game_type: GameType, //bytes 4-7
+    /**Just a guess based on observations*/
+    pub game_version: u32, //bytes 8-11
+    pub game_id: u32,        //bytes 12-15
+    pub unknown1: u32,       //bytes 16-19
     pub game_name: NullString, //bytes 20-? //looks like max 31 bytes + null terminator
-    pub unknown3: u8,
+    pub unknown2: u8,
     pub encoded: NullString,
     //pub encoded: Wc3Encoded,
     pub number_of_slots: u32,
     pub game_flags: u32,
     pub number_of_players: u32,
     pub number_of_player_slots: u32,
+    /** Its a guess that this is the games age in seconds */
     pub game_age: u32, //just a guess
     pub tcp_port: u16,
 }
 
-#[derive(BinRead, BinWrite, Debug)]
+#[derive(BinRead, BinWrite, Debug, Clone)]
 #[brw(little)]
-#[brw(magic = b"\xF7\x2F")] //byte 0-1
+#[brw(magic = b"\xF7\x2F\x10\x00")] //byte 0-3 (Packet size is always 16)
 pub struct QueryForGamesRequest {
-    #[br(assert(packet_size == 16))]
-    pub packet_size: u16, //bytes 2-3
     pub game_type: GameType, //bytes 4-7
     pub game_version: u32,   //bytes 8-11
     #[br(assert(game_id == 0))] //Zero for request
@@ -73,7 +84,6 @@ pub struct QueryForGamesRequest {
 impl QueryForGamesRequest {
     pub fn new(game_type: GameType, game_version: u32) -> Self {
         QueryForGamesRequest {
-            packet_size: 16,
             game_type,
             game_version,
             game_id: 0,
@@ -81,8 +91,24 @@ impl QueryForGamesRequest {
     }
 }
 
+#[derive(BinRead, BinWrite, Debug, Clone)]
+#[brw(little)]
+#[brw(magic = b"\xF7\x31\x10\x00")] //byte 0-3 (Packet size is always 16)
+pub struct NewServerHosted {
+    pub game_type: GameType, //bytes 4-7
+    pub game_version: u32,   //bytes 8-11
+    pub game_id: u32,        //bytes 12-15
+}
+
+#[derive(BinRead, BinWrite, Debug, Clone)]
+#[brw(little)]
+#[brw(magic = b"\xF7\x33\x08\x00")] //byte 0-3 (Packet size is always 8)
+pub struct ServerClosed {
+    pub game_id: u32, //bytes 4-7
+}
+
 //The magic values are reversed for some reason.
-#[derive(BinRead, BinWrite, Debug)]
+#[derive(BinRead, BinWrite, Debug, Clone, Copy)]
 #[brw(little)]
 pub enum GameType {
     #[brw(magic = b"3RAW")] //WAR3
@@ -133,7 +159,7 @@ pub struct QueryForGamesResponseInner {
     pub map_checksum: u32,  //Bytes 9-12
     pub map_name: NullString,
     pub host_username: NullString,
-    pub unknown2: u8, //Byte 4
+    pub unknown2: u8,
 }
 
 pub fn decode_encoded_string(encoded: &[u8]) -> Vec<u8> {
