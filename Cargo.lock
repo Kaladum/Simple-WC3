@@ -2706,7 +2706,7 @@ dependencies = [
 
 [[package]]
 name = "simple-wc3"
-version = "0.0.4"
+version = "0.0.6"
 dependencies = [
  "binrw",
  "iroh",
