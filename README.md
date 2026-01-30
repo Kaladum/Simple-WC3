@@ -1,7 +1,7 @@
 # Simple-WC3
 
-A unofficial [Warcraft 3](https://warcraft3.blizzard.com/) LAN connectivity tool
-built with Rust, enabling LAN Games over the internet using the
+An unofficial [Warcraft 3](https://warcraft3.blizzard.com/) LAN connectivity
+tool built with Rust, enabling LAN Games over the internet using the
 [Iroh](https://www.iroh.computer/) network protocol.
 
 The software is currently in beta. Our first tests went well, but there are
@@ -21,8 +21,8 @@ still a few bugs and issues we’re working on fixing.
 
 This is a portable app. No installation required.
 
-Jus download the latest release for your platform from the **Assets** section on
-the [Releases](https://github.com/Kaladum/Simple-WC3/releases/latest) page:
+Just download the latest release for your platform from the **Assets** section
+on the [Releases](https://github.com/Kaladum/Simple-WC3/releases/latest) page:
 
 - **Windows**: `simple-wc3-windows-x86_64.exe`
 - **Linux**: `simple-wc3-linux-x86_64`
@@ -84,6 +84,8 @@ If your port is not set to 6112 you will not be able to host!
   - The Game Version can be seen in the bottom right corner of the main menu
 - Verify that all users use the same Version of Simple-WC3
   - Preferably use the latest version
+- Verify that the game port is set to 6112 in the settings of the hosting WC3
+  installation.
 - Look for error messages in the console outputs
 
 ## Technical description
@@ -125,12 +127,12 @@ reliable way to capture broadcast packages while running on the same machine as
 the WC3 instance. Therefore, this software ignores all outgoing and fakes all
 incoming broadcasts.
 
-[*2] => Once per second this software sends fake `SearchForGameRequests` to the
-WC3 server. The request contains the version of the searching WC3 game and if it
-is the normal or Frozen Throne version of the game. To support both games and
-multiple versions, a package is sent for every combination of the Game Extension
-and the Game Version (1.25 - 1.35). The WC3 server only responds if the
-extension and version of the request match its own.
+[*2] => Once per second, this software sends fake `SearchForGameRequests` to the
+WC3 server. The request contains the version of the searching WC3 game and
+whether is the normal or Frozen Throne version of the game. To support both
+games and multiple versions, a package is sent for every combination of the Game
+Extension and the Game Version (1.25 - 1.35). The WC3 server only responds if
+the extension and version of the request match its own.
 
 ## License
 
